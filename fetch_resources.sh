@@ -8,7 +8,7 @@ echo "=== 1. Prepare Il2CppInspector ==="
 # 1.1 创建临时目录
 mkdir -p Temp/Il2CppInspector
 # 1.2 使用【具体版本链接】下载（避免latest重定向问题，选择已知可用版本）
-IL2CPP_ZIP_URL="https://github.com/djkaty/Il2CppInspector/releases/download/2021.1/Il2CppInspector-2021.1.zip"
+IL2CPP_ZIP_URL="https://github.com/djkaty/Il2CppInspector/archive/refs/tags/2021.1.tar.gz"
 IL2CPP_ZIP_PATH="Temp/Il2CppInspectorRedux.CLI.zip"
 
 # 优化curl参数：跟随重定向、指定User-Agent、失败重试、显示进度
