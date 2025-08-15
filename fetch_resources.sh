@@ -2,13 +2,28 @@
 set -e  # 任何命令失败立即退出，避免后续无效执行
 
 # ==============================================
-# 步骤1：提前处理Il2CppInspector（关键！确保Python脚本运行前准备好）
+# 步骤0：安装Wine依赖（用于运行Windows版本Il2CppInspector）
 # ==============================================
-echo "=== 1. Prepare Il2CppInspector ==="
+echo "=== 0. Install Wine (for Windows Il2CppInspector) ==="
+sudo dpkg --add-architecture i386  # 启用32位架构支持
+sudo apt-get update
+sudo apt-get install -y wine64 wine32  # 安装Wine（64位+32位支持）
+
+# 验证Wine安装
+echo "Testing Wine installation..."
+if ! wine --version &> /dev/null; then
+  echo "Error: Wine installation failed!"
+  exit 1
+fi
+
+# ==============================================
+# 步骤1：准备Il2CppInspector（使用Windows版本+Wine运行）
+# ==============================================
+echo -e "\n=== 1. Prepare Il2CppInspector ==="
 # 1.1 创建临时目录
 mkdir -p Temp/Il2CppInspector
-# 1.2 使用【具体版本链接】下载（避免latest重定向问题，选择已知可用版本）
-IL2CPP_ZIP_URL="https://github.com/djkaty/Il2CppInspector/archive/refs/tags/2021.1.zip"
+# 1.2 下载Windows版本的Il2CppInspector（使用有效链接）
+IL2CPP_ZIP_URL="https://github.com/djkaty/Il2CppInspector/releases/download/2021.1/Il2CppInspector-2021.1.zip"
 IL2CPP_ZIP_PATH="Temp/Il2CppInspectorRedux.CLI.zip"
 
 # 优化curl参数：跟随重定向、指定User-Agent、失败重试、显示进度
@@ -18,11 +33,11 @@ curl -L -f -A "Mozilla/5.0 (Linux; Ubuntu 22.04; x86_64) AppleWebKit/537.36 (KHT
   --retry 3 \
   --progress-bar "$IL2CPP_ZIP_URL"
 
-# 1.3 校验ZIP包是否有效（避免下载损坏文件）
+# 1.3 校验ZIP包是否有效
 echo "Checking if Il2CppInspector ZIP is valid..."
 if ! unzip -t "$IL2CPP_ZIP_PATH" > /dev/null 2>&1; then
   echo "Error: Invalid Il2CppInspector ZIP file! Download failed."
-  rm -f "$IL2CPP_ZIP_PATH"  # 删除损坏文件
+  rm -f "$IL2CPP_ZIP_PATH"
   exit 1
 fi
 
@@ -30,20 +45,25 @@ fi
 echo "Unzipping Il2CppInspector..."
 unzip -o "$IL2CPP_ZIP_PATH" -d Temp/Il2CppInspector
 
-# 1.5 找到并配置可执行文件（处理可能的子目录，如linux-x64）
-IL2CPP_EXE=$(find Temp/Il2CppInspector -name "Il2CppInspector" -type f | head -n 1)
+# 1.5 查找Windows版本的可执行文件（.exe）
+IL2CPP_EXE=$(find Temp/Il2CppInspector -name "Il2CppInspector-cli.exe" -type f | head -n 1)
 if [ -z "$IL2CPP_EXE" ]; then
-  echo "Error: Il2CppInspector executable not found after unzip!"
+  # 备选：查找主程序exe
+  IL2CPP_EXE=$(find Temp/Il2CppInspector -name "Il2CppInspector.exe" -type f | head -n 1)
+fi
+
+if [ -z "$IL2CPP_EXE" ]; then
+  echo "Error: Il2CppInspector .exe file not found after unzip!"
   exit 1
 fi
-# 赋予执行权限并创建软链接（确保Python脚本能在预期路径找到）
-chmod +x "$IL2CPP_EXE"
-ln -sf "$IL2CPP_EXE" Temp/Il2CppInspector/Il2CppInspector
-echo "Il2CppInspector prepared at: $(readlink -f Temp/Il2CppInspector/Il2CppInspector)"
+
+# 创建软链接方便后续调用（通过Wine运行）
+ln -sf "$IL2CPP_EXE" Temp/Il2CppInspector/Il2CppInspector.exe
+echo "Il2CppInspector (Windows) prepared at: $(readlink -f Temp/Il2CppInspector/Il2CppInspector.exe)"
 
 
 # ==============================================
-# 步骤2：原有的依赖安装和资源下载（顺序不变）
+# 步骤2：原有的依赖安装和资源下载（保持不变）
 # ==============================================
 echo -e "\n=== 2. Install Dependencies ==="
 git clone https://github.com/asfu222/BlueArchiveLocalizationTools
@@ -55,7 +75,7 @@ export $(grep -v '^#' ba.env | xargs)
 echo "Using catalog url: $ADDRESSABLE_CATALOG_URL"
 
 mkdir -p resources/TableBundles
-# 下载Excel资源时也添加curl优化参数
+# 下载Excel资源（保持curl优化参数）
 curl -L -f -A "Mozilla/5.0 (Linux; Ubuntu 22.04; x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
   -o resources/TableBundles/Excel.zip \
   --retry 3 \
@@ -68,7 +88,7 @@ curl -L -f -A "Mozilla/5.0 (Linux; Ubuntu 22.04; x86_64) AppleWebKit/537.36 (KHT
 
 
 # ==============================================
-# 步骤3：最后执行Python脚本（此时Il2Cpp已准备好）
+# 步骤3：执行Python脚本（若需调用Il2CppInspector，需用wine前缀）
 # ==============================================
 echo -e "\n=== 4. Run fetch_resources.py ==="
 python3 fetch_resources.py
